@@ -172,12 +172,13 @@ protected:
   bool open_loop;
   double wheel_circumference;
   double track_width;
+  int max_rpm;
   int encoder_ppr;
   int encoder_cpr;
 
 };
 
-MainNode::MainNode() : 
+MainNode::MainNode() :
   starttime(0),
   hstimer(0),
   mstimer(0),
@@ -205,6 +206,7 @@ MainNode::MainNode() :
   baud(115200),
   wheel_circumference(0),
   track_width(0),
+  max_rpm(0),
   encoder_ppr(0),
   encoder_cpr(0)
 {
@@ -232,6 +234,8 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("wheel_circumference: " << wheel_circumference);
   nhLocal.param("track_width", track_width, 0.4318);
   ROS_INFO_STREAM("track_width: " << track_width);
+  nhLocal.param("max_rpm", max_rpm, 100);
+  ROS_INFO_STREAM("max_rpm: " << max_rpm);
   nhLocal.param("encoder_ppr", encoder_ppr, 900);
   ROS_INFO_STREAM("encoder_ppr: " << encoder_ppr);
   nhLocal.param("encoder_cpr", encoder_cpr, 3600);
@@ -322,8 +326,14 @@ void MainNode::cmdvel_setup()
   // set max speed (rpm) for relative speed commands
 //  controller.write("^MXRPM 1 82\r");
 //  controller.write("^MXRPM 2 82\r");
-  controller.write("^MXRPM 1 100\r");
-  controller.write("^MXRPM 2 100\r");
+  // controller.write("^MXRPM 1 100\r");
+  // controller.write("^MXRPM 2 100\r");
+  std::stringstream right_mxrpm;
+  std::stringstream left_mxrpm;
+  right_mxrpm << "^MXRPM 1 " << max_rpm << "\r";
+  left_mxrpm << "^MXRPM 2 " << max_rpm << "\r";
+  controller.write(right_mxrpm.str());
+  controller.write(left_mxrpm.str());
 
   // set max acceleration rate (200 rpm/s * 10)
 //  controller.write("^MAC 1 2000\r");
@@ -440,7 +450,7 @@ void MainNode::odom_setup()
 
   ROS_INFO_STREAM("Publishing to topic " << odom_topic);
   odom_pub = nh.advertise<nav_msgs::Odometry>(odom_topic, 1000);
-	
+
 #ifdef _ODOM_COVAR_SERVER
   ROS_INFO("Advertising service on roboteq/odom_covar_srv");
   odom_covar_server = nh.advertiseService("roboteq/odom_covar_srv", &MainNode::odom_covar_callback, this);
@@ -503,7 +513,7 @@ void MainNode::odom_setup()
 
 void MainNode::odom_stream()
 {
-  
+
 #ifdef _ODOM_SENSORS
   // start encoder and current output (30 hz)
   // doubling frequency since one value is output at each cycle
@@ -815,7 +825,7 @@ int MainNode::run()
 //  ros::Rate loop_rate(10);
 
   ROS_INFO("Beginning looping...");
-	
+
   while (ros::ok())
   {
 
@@ -855,12 +865,12 @@ int MainNode::run()
 
 //    loop_rate.sleep();
   }
-	
+
   if ( controller.isOpen() )
     controller.close();
 
   ROS_INFO("Exiting");
-	
+
   return 0;
 }
 
