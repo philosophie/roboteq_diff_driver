@@ -278,7 +278,7 @@ ROS_DEBUG_STREAM("cmdvel power right: " << right_power << " left: " << left_powe
     int32_t right_rpm = right_speed / wheel_circumference * 60.0;
     int32_t left_rpm = left_speed / wheel_circumference * 60.0;
 #ifdef _CMDVEL_DEBUG
-ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
+ROS_INFO_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #endif
     right_cmd << "!S 1 " << right_rpm << "\r";
     left_cmd << "!S 2 " << left_rpm << "\r";
