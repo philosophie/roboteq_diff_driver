@@ -175,7 +175,7 @@ protected:
   int max_rpm;
   int encoder_ppr;
   int encoder_cpr;
-  int max_amps;
+  double max_amps;
 
 };
 
@@ -242,7 +242,7 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("encoder_ppr: " << encoder_ppr);
   nhLocal.param("encoder_cpr", encoder_cpr, 3600);
   ROS_INFO_STREAM("encoder_cpr: " << encoder_cpr);
-  nhLocal.param("max_amps", max_amps, 50);
+  nhLocal.param("max_amps", max_amps, 5.0);
   ROS_INFO_STREAM("max_amps: " << max_amps);
 
 }
@@ -328,8 +328,8 @@ void MainNode::cmdvel_setup()
   // controller.write("^ALIM 2 50\r");
   std::stringstream right_maxamps;
   std::stringstream left_maxamps;
-  right_maxamps << "^ALIM 1 " << max_amps << "\r";
-  left_maxamps << "^ALIM 2 " << max_amps << "\r";
+  right_maxamps << "^ALIM 1 " << (int) (max_amps * 10) << "\r";
+  left_maxamps << "^ALIM 2 " << (int) (max_amps * 10) << "\r";
   controller.write(right_maxamps.str());
   controller.write(left_maxamps.str());
 
