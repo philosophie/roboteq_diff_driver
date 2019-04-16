@@ -574,7 +574,7 @@ void MainNode::odom_loop()
             odom_encoder_right = (int32_t)strtol(odom_buf+3, NULL, 10);
             odom_encoder_left = (int32_t)strtol(odom_buf+delim+1, NULL, 10);
 #ifdef _ODOM_DEBUG
-ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
+ROS_INFO_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #endif
             odom_publish();
             break;
@@ -698,11 +698,11 @@ void MainNode::odom_publish()
   odom_last_time = nowtime;
 
 #ifdef _ODOM_DEBUG
+/*
 ROS_DEBUG("right: ");
 ROS_DEBUG(odom_encoder_right);
 ROS_DEBUG(" left: ");
 ROS_DEBUG(odom_encoder_left);
-/*
 ROS_DEBUG(" dt: ");
 ROS_DEBUG(dt);
 ROS_DEBUG("");
