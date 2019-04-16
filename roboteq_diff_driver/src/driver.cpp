@@ -698,11 +698,11 @@ void MainNode::odom_publish()
   odom_last_time = nowtime;
 
 #ifdef _ODOM_DEBUG
-/*
 ROS_DEBUG("right: ");
 ROS_DEBUG(odom_encoder_right);
 ROS_DEBUG(" left: ");
 ROS_DEBUG(odom_encoder_left);
+/*
 ROS_DEBUG(" dt: ");
 ROS_DEBUG(dt);
 ROS_DEBUG("");
