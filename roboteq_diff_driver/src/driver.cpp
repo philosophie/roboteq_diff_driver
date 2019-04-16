@@ -175,6 +175,7 @@ protected:
   int max_rpm;
   int encoder_ppr;
   int encoder_cpr;
+  int max_amps;
 
 };
 
@@ -208,7 +209,8 @@ MainNode::MainNode() :
   track_width(0),
   max_rpm(0),
   encoder_ppr(0),
-  encoder_cpr(0)
+  encoder_cpr(0),
+  max_amps(0)
 {
 
 
@@ -240,6 +242,8 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("encoder_ppr: " << encoder_ppr);
   nhLocal.param("encoder_cpr", encoder_cpr, 3600);
   ROS_INFO_STREAM("encoder_cpr: " << encoder_cpr);
+  nhLocal.param("max_amps", max_amps, 50);
+  ROS_INFO_STREAM("max_amps: " << max_amps);
 
 }
 
@@ -320,8 +324,15 @@ void MainNode::cmdvel_setup()
   }
 
   // set motor amps limit (5 A * 10)
-  controller.write("^ALIM 1 50\r");
-  controller.write("^ALIM 2 50\r");
+  // controller.write("^ALIM 1 50\r");
+  // controller.write("^ALIM 2 50\r");
+  std::stringstream right_maxamps;
+  std::stringstream left_maxamps;
+  right_maxamps << "^ALIM 1 " << max_amps << "\r";
+  left_maxamps << "^ALIM 2 " << max_amps << "\r";
+  controller.write(right_maxamps.str());
+  controller.write(left_maxamps.str());
+
 
   // set max speed (rpm) for relative speed commands
 //  controller.write("^MXRPM 1 82\r");
