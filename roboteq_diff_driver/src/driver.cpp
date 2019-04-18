@@ -282,7 +282,7 @@ ROS_DEBUG_STREAM("cmdvel power right: " << right_power << " left: " << left_powe
     int32_t right_rpm = right_speed / wheel_circumference * 60.0;
     int32_t left_rpm = left_speed / wheel_circumference * 60.0;
 #ifdef _CMDVEL_DEBUG
-ROS_INFO_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
+ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #endif
     right_cmd << "!S 1 " << right_rpm << "\r";
     left_cmd << "!S 2 " << left_rpm << "\r";
@@ -324,8 +324,6 @@ void MainNode::cmdvel_setup()
   }
 
   // set motor amps limit (5 A * 10)
-  // controller.write("^ALIM 1 50\r");
-  // controller.write("^ALIM 2 50\r");
   std::stringstream right_maxamps;
   std::stringstream left_maxamps;
   right_maxamps << "^ALIM 1 " << (int) (max_amps * 10) << "\r";
@@ -335,10 +333,6 @@ void MainNode::cmdvel_setup()
 
 
   // set max speed (rpm) for relative speed commands
-//  controller.write("^MXRPM 1 82\r");
-//  controller.write("^MXRPM 2 82\r");
-  // controller.write("^MXRPM 1 100\r");
-  // controller.write("^MXRPM 2 100\r");
   std::stringstream right_mxrpm;
   std::stringstream left_mxrpm;
   right_mxrpm << "^MXRPM 1 " << max_rpm << "\r";
@@ -585,7 +579,7 @@ void MainNode::odom_loop()
             odom_encoder_right = (int32_t)strtol(odom_buf+3, NULL, 10);
             odom_encoder_left = (int32_t)strtol(odom_buf+delim+1, NULL, 10);
 #ifdef _ODOM_DEBUG
-ROS_INFO_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
+ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #endif
             odom_publish();
             break;
