@@ -176,6 +176,9 @@ protected:
   int encoder_ppr;
   int encoder_cpr;
   double max_amps;
+  double proportional_gain;
+  double integral_gain;
+  double differential_gain;
 
 };
 
@@ -210,7 +213,10 @@ MainNode::MainNode() :
   max_rpm(0),
   encoder_ppr(0),
   encoder_cpr(0),
-  max_amps(0)
+  max_amps(0),
+  proportional_gain(0),
+  integral_gain(0),
+  differential_gain(0)
 {
 
 
@@ -244,7 +250,12 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("encoder_cpr: " << encoder_cpr);
   nhLocal.param("max_amps", max_amps, 5.0);
   ROS_INFO_STREAM("max_amps: " << max_amps);
-
+  nhLocal.param("proportional_gain", proportional_gain, 1.0);
+  ROS_INFO_STREAM("proportional_gain: " << proportional_gain);
+  nhLocal.param("integral_gain", integral_gain, 8.0);
+  ROS_INFO_STREAM("integral_gain: " << integral_gain);
+  nhLocal.param("differential_gain", differential_gain, 0.0);
+  ROS_INFO_STREAM("differential_gain: " << differential_gain);
 }
 
 
@@ -330,6 +341,29 @@ void MainNode::cmdvel_setup()
   left_maxamps << "^ALIM 2 " << (int) (max_amps * 10) << "\r";
   controller.write(right_maxamps.str());
   controller.write(left_maxamps.str());
+
+
+  // set PID (value * 10)
+  std::stringstream right_proportional_gain;
+  std::stringstream left_proportional_gain;
+  right_proportional_gain << "^KP 1 " << (int) (proportional_gain * 10) << "\r";
+  left_proportional_gain << "^KP 2 " << (int) (proportional_gain * 10) << "\r";
+  controller.write(right_proportional_gain.str());
+  controller.write(left_proportional_gain.str());
+
+  std::stringstream right_integral_gain;
+  std::stringstream left_integral_gain;
+  right_integral_gain << "^KI 1 " << (int) (integral_gain * 10) << "\r";
+  left_integral_gain << "^KI 2 " << (int) (integral_gain * 10) << "\r";
+  controller.write(right_integral_gain.str());
+  controller.write(left_integral_gain.str());
+
+  std::stringstream right_differential_gain;
+  std::stringstream left_differential_gain;
+  right_differential_gain << "^KD 1 " << (int) (differential_gain * 10) << "\r";
+  left_differential_gain << "^KD 2 " << (int) (differential_gain * 10) << "\r";
+  controller.write(right_differential_gain.str());
+  controller.write(left_differential_gain.str());
 
 
   // set max speed (rpm) for relative speed commands
