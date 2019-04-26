@@ -18,11 +18,11 @@
     <param name="baud" value="115200" />
 
     <!-- specify whether to use open-loop motor speed control (as opposed to closed-loop)-->
-    <param name="open-loop" value="false" />
+    <param name="open_loop" value="false" />
     <!-- for closed-loop mode, set the PID configuration -->
-    <param name="proportional-gain" value="1.0" />
-    <param name="integral-gain" value="8.0" />
-    <param name="differential-gain" value="0.0" />
+    <param name="proportional_gain" value="1.0" />
+    <param name="integral_gain" value="8.0" />
+    <param name="differential_gain" value="0.0" />
 
 
     <!-- specify robot wheel circumference in meters  -->
