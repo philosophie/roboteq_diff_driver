@@ -423,14 +423,6 @@ void MainNode::cmdvel_setup()
   controller.write("^MDEC 1 20000\r");
   controller.write("^MDEC 2 20000\r");
 
-  // set PID parameters (gain * 10)
-  controller.write("^KP 1 10\r");
-  controller.write("^KP 2 10\r");
-  controller.write("^KI 1 80\r");
-  controller.write("^KI 2 80\r");
-  controller.write("^KD 1 0\r");
-  controller.write("^KD 2 0\r");
-
   // set encoder mode (18 for feedback on motor1, 34 for feedback on motor2)
   controller.write("^EMOD 1 18\r");
   controller.write("^EMOD 2 34\r");
