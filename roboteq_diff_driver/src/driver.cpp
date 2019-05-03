@@ -300,7 +300,6 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
     {
       ros::Time now = ros::Time::now();
       double virtual_closed_loop_current_time = now.sec + NS_TO_SEC(now.nsec);
-      ROS_INFO("in a double %f", virtual_closed_loop_current_time);
 
       int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
       // int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
@@ -310,7 +309,6 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       // int32_t error_left_rpm = target_left_rpm - odom_encoder_left
 
       float sample_time = virtual_closed_loop_current_time - virtual_closed_loop_previous_time;
-      ROS_INFO_STREAM("sample_time: " << sample_time);
       if (sample_time != 0) {
         // TODO: reset pid when cmd_vel is 0
         virtual_closed_loop_right_power = virtual_closed_loop_pid.step(error_right_rpm, sample_time);
