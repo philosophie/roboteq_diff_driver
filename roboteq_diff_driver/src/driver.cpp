@@ -152,6 +152,9 @@ protected:
 
   uint32_t odom_last_time;
 
+  int32_t virtual_closed_loop_right_power;
+  int32_t virtual_closed_loop_left_power;
+
 #ifdef _ODOM_SENSORS
   float voltage;
   float current_right;
@@ -195,6 +198,8 @@ MainNode::MainNode() :
   odom_last_y(0.0),
   odom_last_yaw(0.0),
   odom_last_time(0),
+  virtual_closed_loop_right_power(0),
+  virtual_closed_loop_left_power(0),
 #ifdef _ODOM_SENSORS
   voltage(0.0),
   current_right(0.0),
@@ -274,7 +279,29 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
     if (virtual_closed_loop)
     {
       int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
-      int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
+      // int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
+      // odom_encoder_right, odom_encoder_left
+
+      int32_t error_right_rpm = target_right_rpm - odom_encoder_right;
+      // int32_t error_left_rpm = target_left_rpm - odom_encoder_left
+
+      ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm);
+
+      // TODO: within some reasonable threshold
+      if (error_right_rpm > 0) {
+        // speed up
+        virtual_closed_loop_right_power += 50;
+      } else if (error_right_rpm < 0) {
+        // slow down
+        virtual_closed_loop_right_power -= 50;
+      }
+
+      if (virtual_closed_loop_right_power > 1000) {
+        virtual_closed_loop_right_power = 1000;
+      }
+
+      right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
+      // left_cmd << "!G 2 " << left_power << "\r";
     }
     else
     {
@@ -293,7 +320,6 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
     // motor speed (rpm)
     int32_t right_rpm = right_speed / wheel_circumference * 60.0;
     int32_t left_rpm = left_speed / wheel_circumference * 60.0;
-    // ROS_INFO_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #ifdef _CMDVEL_DEBUG
 ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #endif
@@ -591,7 +617,6 @@ void MainNode::odom_loop()
             odom_buf[delim] = 0;
             odom_encoder_right = (int32_t)strtol(odom_buf+3, NULL, 10);
             odom_encoder_left = (int32_t)strtol(odom_buf+delim+1, NULL, 10);
-            ROS_INFO_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #ifdef _ODOM_DEBUG
 ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #endif
