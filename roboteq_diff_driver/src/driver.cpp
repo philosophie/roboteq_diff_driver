@@ -285,8 +285,6 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       int32_t error_right_rpm = target_right_rpm - odom_encoder_right;
       // int32_t error_left_rpm = target_left_rpm - odom_encoder_left
 
-      ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm);
-
       // TODO: within some reasonable threshold
       if (error_right_rpm > 0) {
         // speed up
@@ -299,6 +297,8 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       if (virtual_closed_loop_right_power > 1000) {
         virtual_closed_loop_right_power = 1000;
       }
+
+      ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
 
       right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
       // left_cmd << "!G 2 " << left_power << "\r";
