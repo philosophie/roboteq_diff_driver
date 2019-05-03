@@ -299,7 +299,7 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
     {
       ros::Time now = ros::Time::now();
       float nowSec = (float)now.sec;
-      float virtual_closed_loop_current_time = (float)(nowSec + NS_TO_SEC(now.nsec));
+      float virtual_closed_loop_current_time = (float)nowSec + (float)NS_TO_SEC(now.nsec);
       ROS_INFO("nowSec %f %f", nowSec, NS_TO_SEC(now.nsec));
       ROS_INFO("added %f", nowSec + NS_TO_SEC(now.nsec));
       ROS_INFO("in a float %f", virtual_closed_loop_current_time);
