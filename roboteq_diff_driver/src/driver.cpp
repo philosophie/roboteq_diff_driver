@@ -270,8 +270,8 @@ MainNode::MainNode() :
   nhLocal.param("differential_gain", differential_gain, 0.0);
   ROS_INFO_STREAM("differential_gain: " << differential_gain);
 
-  // virtual_closed_loop_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
-  virtual_closed_loop_pid.config(0, 1, 0, -1000, 1000);
+  virtual_closed_loop_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
+  // virtual_closed_loop_pid.config(0, 1, 0, -1000, 1000);
   ros::Time now = ros::Time::now();
   virtual_closed_loop_previous_time = (float)now.sec + NS_TO_SEC(now.nsec);
 }
