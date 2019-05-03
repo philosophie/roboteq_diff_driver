@@ -293,6 +293,7 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
     // motor speed (rpm)
     int32_t right_rpm = right_speed / wheel_circumference * 60.0;
     int32_t left_rpm = left_speed / wheel_circumference * 60.0;
+    ROS_INFO_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #ifdef _CMDVEL_DEBUG
 ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #endif
@@ -590,7 +591,7 @@ void MainNode::odom_loop()
             odom_buf[delim] = 0;
             odom_encoder_right = (int32_t)strtol(odom_buf+3, NULL, 10);
             odom_encoder_left = (int32_t)strtol(odom_buf+delim+1, NULL, 10);
-            ROS_INFO_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
+            // ROS_INFO_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #ifdef _ODOM_DEBUG
 ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #endif
