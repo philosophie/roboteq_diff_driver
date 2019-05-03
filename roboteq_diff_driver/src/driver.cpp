@@ -300,9 +300,11 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       ros::Time now = ros::Time::now();
       float nowSec = (float)now.sec;
       float virtual_closed_loop_current_time = (float)nowSec + (float)NS_TO_SEC(now.nsec);
+
       ROS_INFO("nowSec %f %f", nowSec, NS_TO_SEC(now.nsec));
       ROS_INFO("added %f", nowSec + NS_TO_SEC(now.nsec));
       ROS_INFO("in a float %f", virtual_closed_loop_current_time);
+      ROS_INFO("%s %s", typeid(virtual_closed_loop_current_time).name, typeid(nowSec + NS_TO_SEC(now.nsec)).name)
 
       int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
       // int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
