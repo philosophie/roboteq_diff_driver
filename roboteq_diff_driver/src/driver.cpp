@@ -50,6 +50,7 @@
 #include "rogoteq_diff_msgs/RequestOdometryCovariances.h"
 #endif
 
+#include "pid.h"
 
 
 void mySigintHandler(int sig)
@@ -154,6 +155,8 @@ protected:
 
   int32_t virtual_closed_loop_right_power;
   int32_t virtual_closed_loop_left_power;
+  PID virtual_closed_loop_pid;
+  float virtual_closed_loop_previous_time;
 
 #ifdef _ODOM_SENSORS
   float voltage;
@@ -265,6 +268,10 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("integral_gain: " << integral_gain);
   nhLocal.param("differential_gain", differential_gain, 0.0);
   ROS_INFO_STREAM("differential_gain: " << differential_gain);
+
+  virtual_closed_loop_pid.config(proportional_gain, integral_gain, differential_gain, -10, 10);
+  ros::Time now = ros::Time::now();
+  virtual_closed_loop_previous_time = now.sec + NS_TO_SEC(now.nsec);
 }
 
 
@@ -289,30 +296,40 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
   {
     if (virtual_closed_loop)
     {
+      ros::Time now = ros::Time::now();
+      float virtual_closed_loop_current_time = now.sec + NS_TO_SEC(now.nsec);
+
       int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
       // int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
       // odom_encoder_right, odom_encoder_left
 
-      int32_t error_right_rpm = target_right_rpm - odom_encoder_right;
+      float error_right_rpm = (float)(target_right_rpm - odom_encoder_right);
       // int32_t error_left_rpm = target_left_rpm - odom_encoder_left
 
-      // TODO: within some reasonable threshold
-      if (error_right_rpm > 0) {
-        // speed up
-        virtual_closed_loop_right_power += 10;
-      } else if (error_right_rpm < 0) {
-        // slow down
-        virtual_closed_loop_right_power -= 10;
+      float sample_time = virtual_closed_loop_current_time - virtual_closed_loop_prev_time;
+      if (sample_time != 0) {
+        // TODO: reset pid when cmd_vel is 0
+        virtual_closed_loop_right_power = virtual_closed_loop_pid.step(error_right_rpm, sample_time);
+
+        // if (error_right_rpm > 0) {
+        //   // speed up
+        //   virtual_closed_loop_right_power += 50;
+        // } else if (error_right_rpm < 0) {
+        //   // slow down
+        //   virtual_closed_loop_right_power -= 50;
+        // }
+
+        if (virtual_closed_loop_right_power > 1000) {
+          virtual_closed_loop_right_power = 1000;
+        }
+
+        ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
+
+        right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
+        // left_cmd << "!G 2 " << left_power << "\r";
       }
 
-      if (virtual_closed_loop_right_power > 1000) {
-        virtual_closed_loop_right_power = 1000;
-      }
-
-      ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
-
-      right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
-      // left_cmd << "!G 2 " << left_power << "\r";
+      virtual_closed_loop_prev_time = virtual_closed_loop_current_time;
     }
     else
     {
