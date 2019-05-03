@@ -298,7 +298,8 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
     if (virtual_closed_loop)
     {
       ros::Time now = ros::Time::now();
-      float virtual_closed_loop_current_time = (float)now.sec + NS_TO_SEC(now.nsec);
+      float nowSec = (float)now.sec;
+      float virtual_closed_loop_current_time = nowSec + NS_TO_SEC(now.nsec);
 
       int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
       // int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
