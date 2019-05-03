@@ -7,6 +7,7 @@
 
 
 #define DELTAT(_nowtime,_thentime) ((_thentime>_nowtime)?((0xffffffff-_thentime)+_nowtime):(_nowtime-_thentime))
+#define NS_TO_SEC(ns) ((ns) / 1000000000.0)
 
 
 //
