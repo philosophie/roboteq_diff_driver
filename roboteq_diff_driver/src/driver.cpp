@@ -310,8 +310,13 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
 
       float sample_time = virtual_closed_loop_current_time - virtual_closed_loop_previous_time;
       if (sample_time != 0) {
-        // TODO: reset pid when cmd_vel is 0
-        virtual_closed_loop_right_power = virtual_closed_loop_pid.step(error_right_rpm, sample_time);
+        if (target_right_rpm == 0 && error_right_rpm == 0) {
+          // TODO: reset pid when cmd_vel is 0
+          virtual_closed_loop_pid.reset()
+          virtual_closed_loop_right_power = 0;
+        } else {
+          virtual_closed_loop_right_power = virtual_closed_loop_pid.step(error_right_rpm, sample_time);
+        }
 
         ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
 
