@@ -270,7 +270,7 @@ MainNode::MainNode() :
   nhLocal.param("differential_gain", differential_gain, 0.0);
   ROS_INFO_STREAM("differential_gain: " << differential_gain);
 
-  virtual_closed_loop_pid.config(proportional_gain, integral_gain, differential_gain, -10, 10);
+  virtual_closed_loop_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
   ros::Time now = ros::Time::now();
   virtual_closed_loop_previous_time = (float)now.sec + NS_TO_SEC(now.nsec);
 }
@@ -313,18 +313,6 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       if (sample_time != 0) {
         // TODO: reset pid when cmd_vel is 0
         virtual_closed_loop_right_power = virtual_closed_loop_pid.step(error_right_rpm, sample_time);
-
-        // if (error_right_rpm > 0) {
-        //   // speed up
-        //   virtual_closed_loop_right_power += 50;
-        // } else if (error_right_rpm < 0) {
-        //   // slow down
-        //   virtual_closed_loop_right_power -= 50;
-        // }
-
-        if (virtual_closed_loop_right_power > 1000) {
-          virtual_closed_loop_right_power = 1000;
-        }
 
         ROS_INFO_STREAM("target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
 
