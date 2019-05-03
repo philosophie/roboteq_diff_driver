@@ -288,10 +288,10 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       // TODO: within some reasonable threshold
       if (error_right_rpm > 0) {
         // speed up
-        virtual_closed_loop_right_power += 50;
+        virtual_closed_loop_right_power += 10;
       } else if (error_right_rpm < 0) {
         // slow down
-        virtual_closed_loop_right_power -= 50;
+        virtual_closed_loop_right_power -= 10;
       }
 
       if (virtual_closed_loop_right_power > 1000) {
