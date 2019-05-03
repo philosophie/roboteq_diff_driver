@@ -15,7 +15,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(${PROJECT_NAME}_driver src/driver.cpp)
+add_executable(${PROJECT_NAME}_driver src/driver.cpp src/pid.cpp)
 target_link_libraries(${PROJECT_NAME}_driver ${catkin_LIBRARIES})
 set_target_properties(${PROJECT_NAME}_driver PROPERTIES OUTPUT_NAME driver PREFIX "")
 add_dependencies(${PROJECT_NAME}_driver roboteq_diff_msgs_gencpp)
