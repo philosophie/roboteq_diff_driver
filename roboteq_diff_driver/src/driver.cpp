@@ -324,8 +324,10 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
           virtual_closed_loop_left_power = virtual_closed_loop_left_pid.step(error_left_rpm, sample_time);
         }
 
-        ROS_INFO_STREAM("RIGHT - target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
-        ROS_INFO_STREAM("LEFT - target: " << target_left_rpm << " error: " << error_left_rpm << " power: " << virtual_closed_loop_left_power);
+        #ifdef _CMDVEL_DEBUG
+        ROS_DEBUG_STREAM("RIGHT - target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
+        ROS_DEBUG_STREAM("LEFT - target: " << target_left_rpm << " error: " << error_left_rpm << " power: " << virtual_closed_loop_left_power);
+        #endif
 
         right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
         left_cmd << "!G 2 " << virtual_closed_loop_left_power << "\r";
