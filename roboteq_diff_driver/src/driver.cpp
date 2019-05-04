@@ -7,6 +7,7 @@
 
 
 #define DELTAT(_nowtime,_thentime) ((_thentime>_nowtime)?((0xffffffff-_thentime)+_nowtime):(_nowtime-_thentime))
+#define NS_TO_SEC(ns) ((ns) / 1000000000.0)
 
 
 //
@@ -50,6 +51,7 @@
 #include "rogoteq_diff_msgs/RequestOdometryCovariances.h"
 #endif
 
+#include "pid.h"
 
 
 void mySigintHandler(int sig)
@@ -152,6 +154,10 @@ protected:
 
   uint32_t odom_last_time;
 
+  PID virtual_closed_loop_right_pid;
+  PID virtual_closed_loop_left_pid;
+  double virtual_closed_loop_previous_time;
+
 #ifdef _ODOM_SENSORS
   float voltage;
   float current_right;
@@ -170,6 +176,7 @@ protected:
   std::string port;
   int baud;
   bool open_loop;
+  bool virtual_closed_loop;
   double wheel_circumference;
   double track_width;
   int max_rpm;
@@ -207,6 +214,7 @@ MainNode::MainNode() :
 #endif
   pub_odom_tf(true),
   open_loop(false),
+  virtual_closed_loop(false),
   baud(115200),
   wheel_circumference(0),
   track_width(0),
@@ -238,6 +246,8 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("baud: " << baud);
   nhLocal.param("open_loop", open_loop, false);
   ROS_INFO_STREAM("open_loop: " << open_loop);
+  nhLocal.param("virtual_closed_loop", virtual_closed_loop, false);
+  ROS_INFO_STREAM("virtual_closed_loop: " << virtual_closed_loop);
   nhLocal.param("wheel_circumference", wheel_circumference, 0.3192);
   ROS_INFO_STREAM("wheel_circumference: " << wheel_circumference);
   nhLocal.param("track_width", track_width, 0.4318);
@@ -256,6 +266,11 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("integral_gain: " << integral_gain);
   nhLocal.param("differential_gain", differential_gain, 0.0);
   ROS_INFO_STREAM("differential_gain: " << differential_gain);
+
+  virtual_closed_loop_right_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
+  virtual_closed_loop_left_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
+  ros::Time now = ros::Time::now();
+  virtual_closed_loop_previous_time = now.sec + NS_TO_SEC(now.nsec);
 }
 
 
@@ -278,14 +293,59 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
 
   if (open_loop)
   {
-    // motor power (scale 0-1000)
-    int32_t right_power = right_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
-    int32_t left_power = left_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
-#ifdef _CMDVEL_DEBUG
-ROS_DEBUG_STREAM("cmdvel power right: " << right_power << " left: " << left_power);
-#endif
-    right_cmd << "!G 1 " << right_power << "\r";
-    left_cmd << "!G 2 " << left_power << "\r";
+    if (virtual_closed_loop)
+    {
+      ros::Time now = ros::Time::now();
+      double virtual_closed_loop_current_time = now.sec + NS_TO_SEC(now.nsec);
+
+      int32_t virtual_closed_loop_right_power = 0;
+      int32_t virtual_closed_loop_left_power = 0;
+
+      int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
+      int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
+
+      float error_right_rpm = (float)(target_right_rpm - odom_encoder_right);
+      float error_left_rpm = (float)(target_left_rpm - odom_encoder_left);
+
+      float sample_time = virtual_closed_loop_current_time - virtual_closed_loop_previous_time;
+
+      if (sample_time != 0) {
+        if (target_right_rpm == 0 && error_right_rpm == 0) {
+          virtual_closed_loop_right_pid.reset();
+          virtual_closed_loop_right_power = 0;
+        } else {
+          virtual_closed_loop_right_power = virtual_closed_loop_right_pid.step(error_right_rpm, sample_time);
+        }
+
+        if (target_left_rpm == 0 && error_left_rpm == 0) {
+          virtual_closed_loop_left_pid.reset();
+          virtual_closed_loop_left_power = 0;
+        } else {
+          virtual_closed_loop_left_power = virtual_closed_loop_left_pid.step(error_left_rpm, sample_time);
+        }
+
+        #ifdef _CMDVEL_DEBUG
+        ROS_DEBUG_STREAM("RIGHT - target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
+        ROS_DEBUG_STREAM("LEFT - target: " << target_left_rpm << " error: " << error_left_rpm << " power: " << virtual_closed_loop_left_power);
+        #endif
+
+        right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
+        left_cmd << "!G 2 " << virtual_closed_loop_left_power << "\r";
+      }
+
+      virtual_closed_loop_previous_time = virtual_closed_loop_current_time;
+    }
+    else
+    {
+      // motor power (scale 0-1000)
+      int32_t right_power = right_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
+      int32_t left_power = left_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
+  #ifdef _CMDVEL_DEBUG
+  ROS_DEBUG_STREAM("cmdvel power right: " << right_power << " left: " << left_power);
+  #endif
+      right_cmd << "!G 1 " << right_power << "\r";
+      left_cmd << "!G 2 " << left_power << "\r";
+    }
   }
   else
   {

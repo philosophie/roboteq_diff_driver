@@ -17,13 +17,14 @@
     <!-- specify baud for roboteq controller -->
     <param name="baud" value="115200" />
 
-    <!-- specify whether to use open-loop motor speed control (as opposed to closed-loop)-->
+    <!-- specify whether to use Roboteq's Open Loop motor speed control (as opposed to Closed Loop Speed)-->
     <param name="open_loop" value="false" />
-    <!-- for closed-loop mode, set the PID configuration -->
+    <!-- if Roboteq's built-in Closed Loop Speed mode is causing headaches, set open_loop=true and use this driver's closed loop instead -->
+    <param name="virtual_closed_loop" value="false" />
+    <!-- for Roboteq's Closed Loop Speed mode or virtual closed loop, set the PID configuration -->
     <param name="proportional_gain" value="1.0" />
     <param name="integral_gain" value="8.0" />
     <param name="differential_gain" value="0.0" />
-
 
     <!-- specify robot wheel circumference in meters  -->
     <param name="wheel_circumference" value="0.3192" />
