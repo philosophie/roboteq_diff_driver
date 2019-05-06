@@ -310,19 +310,29 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       float sample_time = virtual_closed_loop_current_time - virtual_closed_loop_previous_time;
 
       if (sample_time != 0) {
-        if (target_right_rpm == 0 && error_right_rpm == 0) {
-          virtual_closed_loop_right_pid.reset();
-          virtual_closed_loop_right_power = 0;
-        } else {
-          virtual_closed_loop_right_power = virtual_closed_loop_right_pid.step(error_right_rpm, sample_time);
-        }
+        if (target_right_rpm == 0 && target_left_rpm == 0 && (error_right_rpm == 0 || error_left_rpm == 0)) {
+            virtual_closed_loop_right_pid.reset();
+            virtual_closed_loop_right_power = 0;
+            virtual_closed_loop_left_pid.reset();
+            virtual_closed_loop_left_power = 0;
+         } else {
+            virtual_closed_loop_right_power = virtual_closed_loop_right_pid.step(error_right_rpm, sample_time);
+            virtual_closed_loop_left_power = virtual_closed_loop_left_pid.step(error_left_rpm, sample_time);
+         }
 
-        if (target_left_rpm == 0 && error_left_rpm == 0) {
-          virtual_closed_loop_left_pid.reset();
-          virtual_closed_loop_left_power = 0;
-        } else {
-          virtual_closed_loop_left_power = virtual_closed_loop_left_pid.step(error_left_rpm, sample_time);
-        }
+//   if (target_right_rpm == 0 && error_right_rpm == 0) {
+//          virtual_closed_loop_right_pid.reset();
+//          virtual_closed_loop_right_power = 0;
+//        } else {
+//          virtual_closed_loop_right_power = virtual_closed_loop_right_pid.step(error_right_rpm, sample_time);
+//        }
+
+//        if (target_left_rpm == 0 && error_left_rpm == 0) {
+//          virtual_closed_loop_left_pid.reset();
+//          virtual_closed_loop_left_power = 0;
+//        } else {
+//          virtual_closed_loop_left_power = virtual_closed_loop_left_pid.step(error_left_rpm, sample_time);
+//        }
 
         #ifdef _CMDVEL_DEBUG
         ROS_DEBUG_STREAM("RIGHT - target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
