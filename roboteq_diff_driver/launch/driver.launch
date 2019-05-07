@@ -17,9 +17,9 @@
     <!-- specify baud for roboteq controller -->
     <param name="baud" value="115200" />
 
-    <!-- specify whether to use Roboteq's Open Loop motor speed control (as opposed to Closed Loop Speed)-->
-    <param name="open_loop" value="false" />
-    <!-- if Roboteq's built-in Closed Loop Speed mode is causing headaches, set open_loop=true and use this driver's closed loop instead -->
+    <!-- Roboteq's operating mode: open_loop, closed_loop_speed, or closed_loop_speec_position -->
+    <param name="operating_mode" value="closed_loop_speed" />
+    <!-- if Roboteq's built-in Closed Loop modes are causing headaches, set operating_mode=open_loop and use this driver's closed loop instead -->
     <param name="virtual_closed_loop" value="false" />
     <!-- for Roboteq's Closed Loop Speed mode or virtual closed loop, set the PID configuration -->
     <param name="proportional_gain" value="1.0" />
