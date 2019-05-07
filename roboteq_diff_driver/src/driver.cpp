@@ -175,7 +175,7 @@ protected:
   std::string odom_topic;
   std::string port;
   int baud;
-  bool open_loop;
+  std::string operating_mode;
   bool virtual_closed_loop;
   double wheel_circumference;
   double track_width;
@@ -213,7 +213,6 @@ MainNode::MainNode() :
   current_last_time(0),
 #endif
   pub_odom_tf(true),
-  open_loop(false),
   virtual_closed_loop(false),
   baud(115200),
   wheel_circumference(0),
@@ -244,8 +243,8 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("port: " << port);
   nhLocal.param("baud", baud, 115200);
   ROS_INFO_STREAM("baud: " << baud);
-  nhLocal.param("open_loop", open_loop, false);
-  ROS_INFO_STREAM("open_loop: " << open_loop);
+  nhLocal.param<std::string>("operating_mode", operating_mode, "open_loop");
+  ROS_INFO_STREAM("operating_mode: " << operating_mode);
   nhLocal.param("virtual_closed_loop", virtual_closed_loop, false);
   ROS_INFO_STREAM("virtual_closed_loop: " << virtual_closed_loop);
   nhLocal.param("wheel_circumference", wheel_circumference, 0.3192);
@@ -291,7 +290,7 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
   std::stringstream right_cmd;
   std::stringstream left_cmd;
 
-  if (open_loop)
+  if (operating_mode == "open_loop")
   {
     if (virtual_closed_loop)
     {
@@ -343,7 +342,7 @@ ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_spee
       left_cmd << "!G 2 " << left_power << "\r";
     }
   }
-  else
+  else if (operating_mode == "closed_loop_speed" || operating_mode == "closed_loop_speed_position")
   {
     // motor speed (rpm)
     int32_t right_rpm = right_speed / wheel_circumference * 60.0;
@@ -378,16 +377,28 @@ void MainNode::cmdvel_setup()
   controller.write("^RWD 1000\r");
 //  controller.write("^RWD 250\r");
 
-  // set motor operating mode (1 for closed-loop speed)
-  if (open_loop)
-  {
-    controller.write("^MMOD 1 0\r");
-    controller.write("^MMOD 2 0\r");
-  }
-  else
+  // set motor operating mode
+  // 0: Open-loop
+  // 1: Closed-loop speed
+  // 2: Closed-loop position relative
+  // 3: Closed-loop count position
+  // 4: Closed-loop position tracking
+  // 5: Torque
+  // 6: Closed-loop speed position
+  if (operating_mode == "closed_loop_speed")
   {
     controller.write("^MMOD 1 1\r");
     controller.write("^MMOD 2 1\r");
+  }
+  else if (operating_mode == "closed_loop_speed_position")
+  {
+    controller.write("^MMOD 1 6\r");
+    controller.write("^MMOD 2 6\r");
+  }
+  else // Open loop
+  {
+    controller.write("^MMOD 1 0\r");
+    controller.write("^MMOD 2 0\r");
   }
 
   // set motor amps limit (5 A * 10)
