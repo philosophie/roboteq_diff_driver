@@ -17,7 +17,7 @@
     <!-- specify baud for roboteq controller -->
     <param name="baud" value="115200" />
 
-    <!-- Roboteq's operating mode: open_loop, closed_loop_speed, or closed_loop_speec_position -->
+    <!-- Roboteq's operating mode: open_loop, closed_loop_speed, or closed_loop_speed_position -->
     <param name="operating_mode" value="closed_loop_speed" />
     <!-- if Roboteq's built-in Closed Loop modes are causing headaches, set operating_mode=open_loop and use this driver's closed loop instead -->
     <param name="virtual_closed_loop" value="false" />
