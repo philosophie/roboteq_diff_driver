@@ -978,6 +978,7 @@ int MainNode::run()
         ros::spinOnce();
         continue;
       }
+    }
     catch (serial::IOException e)
     {
       ROS_WARN_STREAM("serial::IOException: " << e.what());
