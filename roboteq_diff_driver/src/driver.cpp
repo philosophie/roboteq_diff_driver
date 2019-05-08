@@ -281,6 +281,9 @@ bool MainNode::open_serial()
   ROS_INFO_STREAM("Opening serial port on " << port << " at " << baud << "..." );
   try
   {
+    if (controller.isOpen())
+      return true;
+
     controller.open();
     if ( controller.isOpen() )
     {
