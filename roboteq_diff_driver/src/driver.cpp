@@ -63,10 +63,10 @@ void mySigintHandler(int sig)
 
 uint32_t millis()
 {
-	ros::WallTime walltime = ros::WallTime::now();
+  ros::WallTime walltime = ros::WallTime::now();
 //	return (uint32_t)((walltime._sec*1000 + walltime.nsec/1000000.0) + 0.5);
 //	return (uint32_t)(walltime.toNSec()/1000000.0+0.5);
-	return (uint32_t)(walltime.toNSec()/1000000);
+  return (uint32_t)(walltime.toNSec()/1000000);
 }
 
 class MainNode
@@ -76,6 +76,8 @@ public:
   MainNode();
 
 public:
+
+  bool open_serial();
 
   //
   // cmd_vel subscriber
@@ -270,6 +272,32 @@ MainNode::MainNode() :
   virtual_closed_loop_left_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
   ros::Time now = ros::Time::now();
   virtual_closed_loop_previous_time = now.sec + NS_TO_SEC(now.nsec);
+}
+
+
+bool MainNode::open_serial()
+{
+
+  ROS_INFO_STREAM("Opening serial port on " << port << " at " << baud << "..." );
+  try
+  {
+    if (controller.isOpen())
+      return true;
+
+    controller.open();
+    if ( controller.isOpen() )
+    {
+      ROS_INFO("Successfully opened serial port");
+      return true;
+    }
+  }
+  catch (serial::IOException e)
+  {
+    ROS_WARN_STREAM("serial::IOException: " << e.what());
+  }
+  ROS_WARN("Failed to open serial port");
+  return false;
+
 }
 
 
@@ -884,82 +912,83 @@ ROS_DEBUG("");
 int MainNode::run()
 {
 
-	ROS_INFO("Beginning setup...");
+  ROS_INFO("Beginning setup...");
 
-	serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
-	controller.setPort(port);
-	controller.setBaudrate(baud);
-	controller.setTimeout(timeout);
+  serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
+  controller.setPort(port);
+  controller.setBaudrate(baud);
+  controller.setTimeout(timeout);
 
-	// TODO: support automatic re-opening of port after disconnection
-	while ( ros::ok() )
-	{
-		ROS_INFO_STREAM("Opening serial port on " << port << " at " << baud << "..." );
-		try
-		{
-			controller.open();
-			if ( controller.isOpen() )
-			{
-				ROS_INFO("Successfully opened serial port");
-				break;
-			}
-		}
-		catch (serial::IOException e)
-		{
-			ROS_WARN_STREAM("serial::IOException: " << e.what());
-		}
-		ROS_WARN("Failed to open serial port");
-		sleep( 5 );
-	}
+  while ( ros::ok() )
+  {
+    if (open_serial())
+    {
+      break;
+    }
+    else
+    {
+      sleep( 5 );
+    }
+  }
 
-	cmdvel_setup();
-	odom_setup();
+  cmdvel_setup();
+  odom_setup();
 
   starttime = millis();
   hstimer = starttime;
   mstimer = starttime;
   lstimer = starttime;
 
-//  ros::Rate loop_rate(10);
+  // ros::Rate loop_rate(10);
 
   ROS_INFO("Beginning looping...");
 
   while (ros::ok())
   {
-
-    cmdvel_loop();
-    odom_loop();
-
-    uint32_t nowtime = millis();
-//ROS_INFO_STREAM("loop nowtime: " << nowtime << " lstimer: " << lstimer << " delta: " << DELTAT(nowtime,lstimer) << " / " << (nowtime-lstimer));
-//uint32_t delta = DELTAT(nowtime,lstimer);
-//ROS_INFO_STREAM("loop nowtime: " << nowtime << " lstimer: " << lstimer << " delta: " << delta << " / " << (nowtime-lstimer));
-
-//    // Handle 50 Hz publishing
-//    if (DELTAT(nowtime,hstimer) >= 20)
-    // Handle 30 Hz publishing
-    if (DELTAT(nowtime,hstimer) >= 33)
+    try
     {
-      hstimer = nowtime;
-//      odom_hs_run();
+      if (controller.isOpen())
+      {
+        cmdvel_loop();
+        odom_loop();
+
+        uint32_t nowtime = millis();
+
+    //    // Handle 50 Hz publishing
+    //    if (DELTAT(nowtime,hstimer) >= 20)
+        // Handle 30 Hz publishing
+        if (DELTAT(nowtime,hstimer) >= 33)
+        {
+          hstimer = nowtime;
+    //      odom_hs_run();
+        }
+
+        // Handle 10 Hz publishing
+        if (DELTAT(nowtime,mstimer) >= 100)
+        {
+          mstimer = nowtime;
+          cmdvel_run();
+          odom_ms_run();
+        }
+
+        // Handle 1 Hz publishing
+        if (DELTAT(nowtime,lstimer) >= 1000)
+        {
+          lstimer = nowtime;
+          odom_ls_run();
+        }
+
+        ros::spinOnce();
+        continue;
+      }
+    }
+    catch (serial::IOException e)
+    {
+      ROS_WARN_STREAM("serial::IOException: " << e.what());
     }
 
-    // Handle 10 Hz publishing
-    if (DELTAT(nowtime,mstimer) >= 100)
-    {
-      mstimer = nowtime;
-      cmdvel_run();
-      odom_ms_run();
-    }
-
-    // Handle 1 Hz publishing
-    if (DELTAT(nowtime,lstimer) >= 1000)
-    {
-      lstimer = nowtime;
-      odom_ls_run();
-    }
-
-    ros::spinOnce();
+    if (!open_serial())
+      sleep( 5 );
 
 //    loop_rate.sleep();
   }
