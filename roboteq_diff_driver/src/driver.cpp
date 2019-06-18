@@ -382,8 +382,10 @@ ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
     left_cmd << "!S 2 " << left_rpm << "\r";
   }
 
-  controller.write(right_cmd.str());
-  controller.write(left_cmd.str());
+  controller.write("@01" + right_cmd.str());
+  controller.write("@01" + left_cmd.str());
+  controller.write("@02" + right_cmd.str());
+  controller.write("@02" + left_cmd.str());
   controller.flush();
 }
 
