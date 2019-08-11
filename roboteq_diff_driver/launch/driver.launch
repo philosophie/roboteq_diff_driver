@@ -16,8 +16,16 @@
     <param name="port" value="/dev/ttyACM0" />
     <!-- specify baud for roboteq controller -->
     <param name="baud" value="115200" />
-    <!-- specify whether to use open-loop motor speed control (as opposed to closed-loop)-->
-    <param name="open-loop" value="false" />
+
+    <!-- Roboteq's operating mode: open_loop, closed_loop_speed, or closed_loop_speed_position -->
+    <param name="operating_mode" value="closed_loop_speed" />
+    <!-- if Roboteq's built-in Closed Loop modes are causing headaches, set operating_mode=open_loop and use this driver's closed loop instead -->
+    <param name="virtual_closed_loop" value="false" />
+    <!-- for Roboteq's Closed Loop Speed mode or virtual closed loop, set the PID configuration -->
+    <param name="proportional_gain" value="1.0" />
+    <param name="integral_gain" value="8.0" />
+    <param name="differential_gain" value="0.0" />
+
     <!-- specify robot wheel circumference in meters  -->
     <param name="wheel_circumference" value="0.3192" />
     <!-- specify robot track width in meters  -->

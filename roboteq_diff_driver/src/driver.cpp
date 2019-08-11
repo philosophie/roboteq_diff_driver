@@ -5,9 +5,8 @@
 #include <string>
 #include <sstream>
 
-
-#define DELTAT(_nowtime,_thentime) ((_thentime>_nowtime)?((0xffffffff-_thentime)+_nowtime):(_nowtime-_thentime))
-
+#define DELTAT(_nowtime, _thentime) ((_thentime > _nowtime) ? ((0xffffffff - _thentime) + _nowtime) : (_nowtime - _thentime))
+#define NS_TO_SEC(ns) ((ns) / 1000000000.0)
 
 //
 // cmd_vel subscriber
@@ -19,7 +18,6 @@
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
-
 
 //
 // odom publisher
@@ -50,7 +48,7 @@
 #include "rogoteq_diff_msgs/RequestOdometryCovariances.h"
 #endif
 
-
+#include "pid.h"
 
 void mySigintHandler(int sig)
 {
@@ -58,13 +56,12 @@ void mySigintHandler(int sig)
   ros::shutdown();
 }
 
-
 uint32_t millis()
 {
-	ros::WallTime walltime = ros::WallTime::now();
-//	return (uint32_t)((walltime._sec*1000 + walltime.nsec/1000000.0) + 0.5);
-//	return (uint32_t)(walltime.toNSec()/1000000.0+0.5);
-	return (uint32_t)(walltime.toNSec()/1000000);
+  ros::WallTime walltime = ros::WallTime::now();
+  //	return (uint32_t)((walltime._sec*1000 + walltime.nsec/1000000.0) + 0.5);
+  //	return (uint32_t)(walltime.toNSec()/1000000.0+0.5);
+  return (uint32_t)(walltime.toNSec() / 1000000);
 }
 
 class MainNode
@@ -74,11 +71,12 @@ public:
   MainNode();
 
 public:
+  bool open_serial();
 
   //
   // cmd_vel subscriber
   //
-  void cmdvel_callback( const geometry_msgs::Twist& twist_msg);
+  void cmdvel_callback(const geometry_msgs::Twist &twist_msg);
   void cmdvel_setup();
   void cmdvel_loop();
   void cmdvel_run();
@@ -94,7 +92,7 @@ public:
   void odom_ls_run();
   void odom_publish();
 #ifdef _ODOM_COVAR_SERVER
-  void odom_covar_callback(const roboteq_diff_msgs::RequestOdometryCovariancesRequest& req, roboteq_diff_msgs::RequestOdometryCovariancesResponse& res);
+  void odom_covar_callback(const roboteq_diff_msgs::RequestOdometryCovariancesRequest &req, roboteq_diff_msgs::RequestOdometryCovariancesResponse &res);
 #endif
 
   int run();
@@ -152,6 +150,10 @@ protected:
 
   uint32_t odom_last_time;
 
+  PID virtual_closed_loop_right_pid;
+  PID virtual_closed_loop_left_pid;
+  double virtual_closed_loop_previous_time;
+
 #ifdef _ODOM_SENSORS
   float voltage;
   float current_right;
@@ -169,46 +171,54 @@ protected:
   std::string odom_topic;
   std::string port;
   int baud;
-  bool open_loop;
+  std::string operating_mode;
+  bool virtual_closed_loop;
   double wheel_circumference;
   double track_width;
+  int max_rpm;
   int encoder_ppr;
   int encoder_cpr;
-
+  double max_amps;
+  double proportional_gain;
+  double integral_gain;
+  double differential_gain;
 };
 
-MainNode::MainNode() : 
-  starttime(0),
-  hstimer(0),
-  mstimer(0),
-  odom_idx(0),
-  odom_encoder_toss(5),
-  odom_encoder_left(0),
-  odom_encoder_right(0),
-  odom_x(0.0),
-  odom_y(0.0),
-  odom_yaw(0.0),
-  odom_last_x(0.0),
-  odom_last_y(0.0),
-  odom_last_yaw(0.0),
-  odom_last_time(0),
+MainNode::MainNode() : starttime(0),
+                       hstimer(0),
+                       mstimer(0),
+                       odom_idx(0),
+                       odom_encoder_toss(5),
+                       odom_encoder_left(0),
+                       odom_encoder_right(0),
+                       odom_x(0.0),
+                       odom_y(0.0),
+                       odom_yaw(0.0),
+                       odom_last_x(0.0),
+                       odom_last_y(0.0),
+                       odom_last_yaw(0.0),
+                       odom_last_time(0),
 #ifdef _ODOM_SENSORS
-  voltage(0.0),
-  current_right(0.0),
-  current_left(0.0),
-  energy(0.0),
-  temperature(0.0),
-  current_last_time(0),
+                       voltage(0.0),
+                       current_right(0.0),
+                       current_left(0.0),
+                       energy(0.0),
+                       temperature(0.0),
+                       current_last_time(0),
 #endif
-  pub_odom_tf(true),
-  open_loop(false),
-  baud(115200),
-  wheel_circumference(0),
-  track_width(0),
-  encoder_ppr(0),
-  encoder_cpr(0)
+                       pub_odom_tf(true),
+                       virtual_closed_loop(false),
+                       baud(115200),
+                       wheel_circumference(0),
+                       track_width(0),
+                       max_rpm(0),
+                       encoder_ppr(0),
+                       encoder_cpr(0),
+                       max_amps(0),
+                       proportional_gain(0),
+                       integral_gain(0),
+                       differential_gain(0)
 {
-
 
   // CBA Read local params (from launch file)
   ros::NodeHandle nhLocal("~");
@@ -226,55 +236,139 @@ MainNode::MainNode() :
   ROS_INFO_STREAM("port: " << port);
   nhLocal.param("baud", baud, 115200);
   ROS_INFO_STREAM("baud: " << baud);
-  nhLocal.param("open_loop", open_loop, false);
-  ROS_INFO_STREAM("open_loop: " << open_loop);
+  nhLocal.param<std::string>("operating_mode", operating_mode, "open_loop");
+  ROS_INFO_STREAM("operating_mode: " << operating_mode);
+  nhLocal.param("virtual_closed_loop", virtual_closed_loop, false);
+  ROS_INFO_STREAM("virtual_closed_loop: " << virtual_closed_loop);
   nhLocal.param("wheel_circumference", wheel_circumference, 0.3192);
   ROS_INFO_STREAM("wheel_circumference: " << wheel_circumference);
   nhLocal.param("track_width", track_width, 0.4318);
   ROS_INFO_STREAM("track_width: " << track_width);
+  nhLocal.param("max_rpm", max_rpm, 100);
+  ROS_INFO_STREAM("max_rpm: " << max_rpm);
   nhLocal.param("encoder_ppr", encoder_ppr, 900);
   ROS_INFO_STREAM("encoder_ppr: " << encoder_ppr);
   nhLocal.param("encoder_cpr", encoder_cpr, 3600);
   ROS_INFO_STREAM("encoder_cpr: " << encoder_cpr);
+  nhLocal.param("max_amps", max_amps, 5.0);
+  ROS_INFO_STREAM("max_amps: " << max_amps);
+  nhLocal.param("proportional_gain", proportional_gain, 1.0);
+  ROS_INFO_STREAM("proportional_gain: " << proportional_gain);
+  nhLocal.param("integral_gain", integral_gain, 8.0);
+  ROS_INFO_STREAM("integral_gain: " << integral_gain);
+  nhLocal.param("differential_gain", differential_gain, 0.0);
+  ROS_INFO_STREAM("differential_gain: " << differential_gain);
 
+  virtual_closed_loop_right_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
+  virtual_closed_loop_left_pid.config(proportional_gain, integral_gain, differential_gain, -1000, 1000);
+  ros::Time now = ros::Time::now();
+  virtual_closed_loop_previous_time = now.sec + NS_TO_SEC(now.nsec);
 }
 
+bool MainNode::open_serial()
+{
+
+  ROS_INFO_STREAM("Opening serial port on " << port << " at " << baud << "...");
+  try
+  {
+    if (controller.isOpen())
+      return true;
+
+    controller.open();
+    if (controller.isOpen())
+    {
+      ROS_INFO("Successfully opened serial port");
+      return true;
+    }
+  }
+  catch (serial::IOException e)
+  {
+    ROS_WARN_STREAM("serial::IOException: " << e.what());
+  }
+  ROS_WARN("Failed to open serial port");
+  return false;
+}
 
 //
 // cmd_vel subscriber
 //
 
-void MainNode::cmdvel_callback( const geometry_msgs::Twist& twist_msg)
+void MainNode::cmdvel_callback(const geometry_msgs::Twist &twist_msg)
 {
 
   // wheel speed (m/s)
   float right_speed = twist_msg.linear.x + track_width * twist_msg.angular.z / 2.0;
   float left_speed = twist_msg.linear.x - track_width * twist_msg.angular.z / 2.0;
 #ifdef _CMDVEL_DEBUG
-ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_speed);
+  ROS_DEBUG_STREAM("cmdvel speed right: " << right_speed << " left: " << left_speed);
 #endif
 
   std::stringstream right_cmd;
   std::stringstream left_cmd;
 
-  if (open_loop)
+  if (operating_mode == "open_loop")
   {
-    // motor power (scale 0-1000)
-    int32_t right_power = right_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
-    int32_t left_power = left_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
+    if (virtual_closed_loop)
+    {
+      ros::Time now = ros::Time::now();
+      double virtual_closed_loop_current_time = now.sec + NS_TO_SEC(now.nsec);
+
+      int32_t virtual_closed_loop_right_power = 0;
+      int32_t virtual_closed_loop_left_power = 0;
+
+      int32_t target_right_rpm = right_speed / wheel_circumference * 60.0;
+      int32_t target_left_rpm = left_speed / wheel_circumference * 60.0;
+
+      float error_right_rpm = (float)(target_right_rpm - odom_encoder_right);
+      float error_left_rpm = (float)(target_left_rpm - odom_encoder_left);
+
+      float sample_time = virtual_closed_loop_current_time - virtual_closed_loop_previous_time;
+
+      if (sample_time != 0)
+      {
+        if (target_right_rpm == 0 && target_left_rpm == 0 && (error_right_rpm == 0 || error_left_rpm == 0))
+        {
+          virtual_closed_loop_right_pid.reset();
+          virtual_closed_loop_right_power = 0;
+          virtual_closed_loop_left_pid.reset();
+          virtual_closed_loop_left_power = 0;
+        }
+        else
+        {
+          virtual_closed_loop_right_power = virtual_closed_loop_right_pid.step(error_right_rpm, sample_time);
+          virtual_closed_loop_left_power = virtual_closed_loop_left_pid.step(error_left_rpm, sample_time);
+        }
+
 #ifdef _CMDVEL_DEBUG
-ROS_DEBUG_STREAM("cmdvel power right: " << right_power << " left: " << left_power);
+        ROS_DEBUG_STREAM("RIGHT - target: " << target_right_rpm << " error: " << error_right_rpm << " power: " << virtual_closed_loop_right_power);
+        ROS_DEBUG_STREAM("LEFT - target: " << target_left_rpm << " error: " << error_left_rpm << " power: " << virtual_closed_loop_left_power);
 #endif
-    right_cmd << "!G 1 " << right_power << "\r";
-    left_cmd << "!G 2 " << left_power << "\r";
+
+        right_cmd << "!G 1 " << virtual_closed_loop_right_power << "\r";
+        left_cmd << "!G 2 " << virtual_closed_loop_left_power << "\r";
+      }
+
+      virtual_closed_loop_previous_time = virtual_closed_loop_current_time;
+    }
+    else
+    {
+      // motor power (scale 0-1000)
+      int32_t right_power = right_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
+      int32_t left_power = left_speed / wheel_circumference * 60.0 / 82.0 * 1000.0;
+#ifdef _CMDVEL_DEBUG
+      ROS_DEBUG_STREAM("cmdvel power right: " << right_power << " left: " << left_power);
+#endif
+      right_cmd << "!G 1 " << right_power << "\r";
+      left_cmd << "!G 2 " << left_power << "\r";
+    }
   }
-  else
+  else if (operating_mode == "closed_loop_speed" || operating_mode == "closed_loop_speed_position")
   {
     // motor speed (rpm)
     int32_t right_rpm = right_speed / wheel_circumference * 60.0;
     int32_t left_rpm = left_speed / wheel_circumference * 60.0;
 #ifdef _CMDVEL_DEBUG
-ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
+    ROS_DEBUG_STREAM("cmdvel rpm right: " << right_rpm << " left: " << left_rpm);
 #endif
     right_cmd << "!S 1 " << right_rpm << "\r";
     left_cmd << "!S 2 " << left_rpm << "\r";
@@ -301,47 +395,79 @@ void MainNode::cmdvel_setup()
 
   // enable watchdog timer (1000 ms)
   controller.write("^RWD 1000\r");
-//  controller.write("^RWD 250\r");
+  //  controller.write("^RWD 250\r");
 
-  // set motor operating mode (1 for closed-loop speed)
-  if (open_loop)
-  {
-    controller.write("^MMOD 1 0\r");
-    controller.write("^MMOD 2 0\r");
-  }
-  else
+  // set motor operating mode
+  // 0: Open-loop
+  // 1: Closed-loop speed
+  // 2: Closed-loop position relative
+  // 3: Closed-loop count position
+  // 4: Closed-loop position tracking
+  // 5: Torque
+  // 6: Closed-loop speed position
+  if (operating_mode == "closed_loop_speed")
   {
     controller.write("^MMOD 1 1\r");
     controller.write("^MMOD 2 1\r");
   }
+  else if (operating_mode == "closed_loop_speed_position")
+  {
+    controller.write("^MMOD 1 6\r");
+    controller.write("^MMOD 2 6\r");
+  }
+  else // Open loop
+  {
+    controller.write("^MMOD 1 0\r");
+    controller.write("^MMOD 2 0\r");
+  }
 
   // set motor amps limit (5 A * 10)
-  controller.write("^ALIM 1 50\r");
-  controller.write("^ALIM 2 50\r");
+  std::stringstream right_maxamps;
+  std::stringstream left_maxamps;
+  right_maxamps << "^ALIM 1 " << (int)(max_amps * 10) << "\r";
+  left_maxamps << "^ALIM 2 " << (int)(max_amps * 10) << "\r";
+  controller.write(right_maxamps.str());
+  controller.write(left_maxamps.str());
+
+  // set PID (value * 10)
+  std::stringstream right_proportional_gain;
+  std::stringstream left_proportional_gain;
+  right_proportional_gain << "^KP 1 " << (int)(proportional_gain * 10) << "\r";
+  left_proportional_gain << "^KP 2 " << (int)(proportional_gain * 10) << "\r";
+  controller.write(right_proportional_gain.str());
+  controller.write(left_proportional_gain.str());
+
+  std::stringstream right_integral_gain;
+  std::stringstream left_integral_gain;
+  right_integral_gain << "^KI 1 " << (int)(integral_gain * 10) << "\r";
+  left_integral_gain << "^KI 2 " << (int)(integral_gain * 10) << "\r";
+  controller.write(right_integral_gain.str());
+  controller.write(left_integral_gain.str());
+
+  std::stringstream right_differential_gain;
+  std::stringstream left_differential_gain;
+  right_differential_gain << "^KD 1 " << (int)(differential_gain * 10) << "\r";
+  left_differential_gain << "^KD 2 " << (int)(differential_gain * 10) << "\r";
+  controller.write(right_differential_gain.str());
+  controller.write(left_differential_gain.str());
 
   // set max speed (rpm) for relative speed commands
-//  controller.write("^MXRPM 1 82\r");
-//  controller.write("^MXRPM 2 82\r");
-  controller.write("^MXRPM 1 100\r");
-  controller.write("^MXRPM 2 100\r");
+  std::stringstream right_mxrpm;
+  std::stringstream left_mxrpm;
+  right_mxrpm << "^MXRPM 1 " << max_rpm << "\r";
+  left_mxrpm << "^MXRPM 2 " << max_rpm << "\r";
+  controller.write(right_mxrpm.str());
+  controller.write(left_mxrpm.str());
 
   // set max acceleration rate (200 rpm/s * 10)
-//  controller.write("^MAC 1 2000\r");
-//  controller.write("^MAC 2 2000\r");
+  //  controller.write("^MAC 1 2000\r");
+  //  controller.write("^MAC 2 2000\r");
   controller.write("^MAC 1 20000\r");
   controller.write("^MAC 2 20000\r");
 
   // set max deceleration rate (2000 rpm/s * 10)
   controller.write("^MDEC 1 20000\r");
   controller.write("^MDEC 2 20000\r");
-
-  // set PID parameters (gain * 10)
-  controller.write("^KP 1 10\r");
-  controller.write("^KP 2 10\r");
-  controller.write("^KI 1 80\r");
-  controller.write("^KI 2 80\r");
-  controller.write("^KD 1 0\r");
-  controller.write("^KD 2 0\r");
 
   // set encoder mode (18 for feedback on motor1, 34 for feedback on motor2)
   controller.write("^EMOD 1 18\r");
@@ -359,7 +485,6 @@ void MainNode::cmdvel_setup()
 
   ROS_INFO_STREAM("Subscribing to topic " << cmdvel_topic);
   cmdvel_sub = nh.subscribe(cmdvel_topic, 1000, &MainNode::cmdvel_callback, this);
-
 }
 
 void MainNode::cmdvel_loop()
@@ -369,20 +494,19 @@ void MainNode::cmdvel_loop()
 void MainNode::cmdvel_run()
 {
 #ifdef _CMDVEL_FORCE_RUN
-//  controller.write("!G 1 100\r");
-//  controller.write("!G 2 100\r");
+  //  controller.write("!G 1 100\r");
+  //  controller.write("!G 2 100\r");
   controller.write("!S 1 10\r");
   controller.write("!S 2 10\r");
 #endif
 }
-
 
 //
 // odom publisher
 //
 
 #ifdef _ODOM_COVAR_SERVER
-void MainNode::odom_covar_callback(const roboteq_diff_msgs::RequestOdometryCovariancesRequest& req, roboteq_diff_msgs::RequestOdometryCovariancesResponse& res)
+void MainNode::odom_covar_callback(const roboteq_diff_msgs::RequestOdometryCovariancesRequest &req, roboteq_diff_msgs::RequestOdometryCovariancesResponse &res)
 {
   res.odometry_covariances.pose.pose.covariance[0] = 0.001;
   res.odometry_covariances.pose.pose.covariance[7] = 0.001;
@@ -432,15 +556,15 @@ So the covariance for transversal velocity would be (1/2)^2 2C and the covarianc
 void MainNode::odom_setup()
 {
 
-  if ( pub_odom_tf )
+  if (pub_odom_tf)
   {
     ROS_INFO("Broadcasting odom tf");
-//    odom_broadcaster.init(nh);	// ???
+    //    odom_broadcaster.init(nh);	// ???
   }
 
   ROS_INFO_STREAM("Publishing to topic " << odom_topic);
   odom_pub = nh.advertise<nav_msgs::Odometry>(odom_topic, 1000);
-	
+
 #ifdef _ODOM_COVAR_SERVER
   ROS_INFO("Advertising service on roboteq/odom_covar_srv");
   odom_covar_server = nh.advertiseService("roboteq/odom_covar_srv", &MainNode::odom_covar_callback, this);
@@ -503,24 +627,23 @@ void MainNode::odom_setup()
 
 void MainNode::odom_stream()
 {
-  
+
 #ifdef _ODOM_SENSORS
   // start encoder and current output (30 hz)
   // doubling frequency since one value is output at each cycle
-//  controller.write("# C_?CR_?BA_# 17\r");
+  //  controller.write("# C_?CR_?BA_# 17\r");
   // start encoder, current and voltage output (30 hz)
   // tripling frequency since one value is output at each cycle
   controller.write("# C_?CR_?BA_?V_# 11\r");
 #else
-//  // start encoder output (10 hz)
-//  controller.write("# C_?CR_# 100\r");
+  //  // start encoder output (10 hz)
+  //  controller.write("# C_?CR_# 100\r");
   // start encoder output (30 hz)
   controller.write("# C_?CR_# 33\r");
 //  // start encoder output (50 hz)
 //  controller.write("# C_?CR_# 20\r");
 #endif
   controller.flush();
-
 }
 
 void MainNode::odom_loop()
@@ -529,7 +652,7 @@ void MainNode::odom_loop()
   uint32_t nowtime = millis();
 
   // if we haven't received encoder counts in some time then restart streaming
-  if( DELTAT(nowtime,odom_last_time) >= 1000 )
+  if (DELTAT(nowtime, odom_last_time) >= 1000)
   {
     odom_stream();
     odom_last_time = nowtime;
@@ -539,7 +662,7 @@ void MainNode::odom_loop()
   if (controller.available())
   {
     char ch = 0;
-    if ( controller.read((uint8_t*)&ch, 1) == 0 )
+    if (controller.read((uint8_t *)&ch, 1) == 0)
       return;
     if (ch == '\r')
     {
@@ -548,12 +671,12 @@ void MainNode::odom_loop()
 //ROS_DEBUG_STREAM( "line: " << odom_buf );
 #endif
       // CR= is encoder counts
-      if ( odom_buf[0] == 'C' && odom_buf[1] == 'R' && odom_buf[2] == '=' )
+      if (odom_buf[0] == 'C' && odom_buf[1] == 'R' && odom_buf[2] == '=')
       {
         int delim;
-        for ( delim = 3; delim < odom_idx; delim++ )
+        for (delim = 3; delim < odom_idx; delim++)
         {
-          if ( odom_encoder_toss > 0 )
+          if (odom_encoder_toss > 0)
           {
             --odom_encoder_toss;
             break;
@@ -561,10 +684,10 @@ void MainNode::odom_loop()
           if (odom_buf[delim] == ':')
           {
             odom_buf[delim] = 0;
-            odom_encoder_right = (int32_t)strtol(odom_buf+3, NULL, 10);
-            odom_encoder_left = (int32_t)strtol(odom_buf+delim+1, NULL, 10);
+            odom_encoder_right = (int32_t)strtol(odom_buf + 3, NULL, 10);
+            odom_encoder_left = (int32_t)strtol(odom_buf + delim + 1, NULL, 10);
 #ifdef _ODOM_DEBUG
-ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
+            ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_encoder_left);
 #endif
             odom_publish();
             break;
@@ -573,16 +696,16 @@ ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_en
       }
 #ifdef _ODOM_SENSORS
       // V= is voltages
-      else if ( odom_buf[0] == 'V' && odom_buf[1] == '=' )
+      else if (odom_buf[0] == 'V' && odom_buf[1] == '=')
       {
         int count = 0;
         int start = 2;
-        for ( int delim = 2; delim <= odom_idx; delim++ )
+        for (int delim = 2; delim <= odom_idx; delim++)
         {
           if (odom_buf[delim] == ':' || odom_buf[delim] == 0)
           {
             odom_buf[delim] = 0;
-/*
+            /*
             switch (count)
             {
             case 0:
@@ -596,9 +719,9 @@ ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_en
               break;
             }
 */
-            if ( count == 1 )
+            if (count == 1)
             {
-              voltage = (float)strtol(odom_buf+start, NULL, 10) / 10.0;
+              voltage = (float)strtol(odom_buf + start, NULL, 10) / 10.0;
 #ifdef _ODOM_DEBUG
 //ROS_DEBUG_STREAM("voltage: " << voltage);
 #endif
@@ -610,22 +733,22 @@ ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_en
         }
       }
       // BA= is motor currents
-      else if ( odom_buf[0] == 'B' && odom_buf[1] == 'A' && odom_buf[2] == '=' )
+      else if (odom_buf[0] == 'B' && odom_buf[1] == 'A' && odom_buf[2] == '=')
       {
         int delim;
-        for ( delim = 3; delim < odom_idx; delim++ )
+        for (delim = 3; delim < odom_idx; delim++)
         {
           if (odom_buf[delim] == ':')
           {
             odom_buf[delim] = 0;
-            current_right = (float)strtol(odom_buf+3, NULL, 10) / 10.0;
-            current_left = (float)strtol(odom_buf+delim+1, NULL, 10) / 10.0;
+            current_right = (float)strtol(odom_buf + 3, NULL, 10) / 10.0;
+            current_left = (float)strtol(odom_buf + delim + 1, NULL, 10) / 10.0;
 #ifdef _ODOM_DEBUG
 //ROS_DEBUG_STREAM("current right: " << current_right << " left: " << current_left);
 #endif
 
             // determine delta time in seconds
-            float dt = (float)DELTAT(nowtime,current_last_time) / 1000.0;
+            float dt = (float)DELTAT(nowtime, current_last_time) / 1000.0;
             current_last_time = nowtime;
             energy += (current_right + current_left) * dt / 3600.0;
             break;
@@ -635,7 +758,7 @@ ROS_DEBUG_STREAM("encoder right: " << odom_encoder_right << " left: " << odom_en
 #endif
       odom_idx = 0;
     }
-    else if ( odom_idx < (sizeof(odom_buf)-1) )
+    else if (odom_idx < (sizeof(odom_buf) - 1))
     {
       odom_buf[odom_idx++] = ch;
     }
@@ -650,33 +773,31 @@ void MainNode::odom_ms_run()
 {
 
 #ifdef _ODOM_SENSORS
-//  current_msg.header.seq++;
-//  current_msg.header.stamp = ros::Time::now();
+  //  current_msg.header.seq++;
+  //  current_msg.header.stamp = ros::Time::now();
   current_msg.a = current_right;
   current_msg.b = current_left;
   current_pub.publish(current_msg);
 #endif
-
 }
 
 void MainNode::odom_ls_run()
 {
 
 #ifdef _ODOM_SENSORS
-//  voltage_msg.header.seq++;
-//  voltage_msg.header.stamp = ros::Time::now();
+  //  voltage_msg.header.seq++;
+  //  voltage_msg.header.stamp = ros::Time::now();
   voltage_msg.data = voltage;
   voltage_pub.publish(voltage_msg);
-//  energy_msg.header.seq++;
-//  energy_msg.header.stamp = ros::Time::now();
+  //  energy_msg.header.seq++;
+  //  energy_msg.header.stamp = ros::Time::now();
   energy_msg.data = energy;
   energy_pub.publish(energy_msg);
-//  temperature_msg.header.seq++;
-//  temperature_msg.header.stamp = ros::Time::now();
+  //  temperature_msg.header.seq++;
+  //  temperature_msg.header.stamp = ros::Time::now();
   temperature_msg.data = temperature;
   temperature_pub.publish(temperature_msg);
 #endif
-
 }
 
 void MainNode::odom_publish()
@@ -684,7 +805,7 @@ void MainNode::odom_publish()
 
   // determine delta time in seconds
   uint32_t nowtime = millis();
-  float dt = (float)DELTAT(nowtime,odom_last_time) / 1000.0;
+  float dt = (float)DELTAT(nowtime, odom_last_time) / 1000.0;
   odom_last_time = nowtime;
 
 #ifdef _ODOM_DEBUG
@@ -701,7 +822,7 @@ ROS_DEBUG("");
 
   // determine deltas of distance and angle
   float linear = ((float)odom_encoder_right / (float)encoder_cpr * wheel_circumference + (float)odom_encoder_left / (float)encoder_cpr * wheel_circumference) / 2.0;
-//  float angular = ((float)odom_encoder_right / (float)encoder_cpr * wheel_circumference - (float)odom_encoder_left / (float)encoder_cpr * wheel_circumference) / track_width * -1.0;
+  //  float angular = ((float)odom_encoder_right / (float)encoder_cpr * wheel_circumference - (float)odom_encoder_left / (float)encoder_cpr * wheel_circumference) / track_width * -1.0;
   float angular = ((float)odom_encoder_right / (float)encoder_cpr * wheel_circumference - (float)odom_encoder_left / (float)encoder_cpr * wheel_circumference) / track_width;
 #ifdef _ODOM_DEBUG
 /*
@@ -714,9 +835,9 @@ ROS_DEBUG("");
 #endif
 
   // Update odometry
-  odom_x += linear * cos(odom_yaw);        // m
-  odom_y += linear * sin(odom_yaw);        // m
-  odom_yaw = NORMALIZE(odom_yaw + angular);  // rad
+  odom_x += linear * cos(odom_yaw);         // m
+  odom_y += linear * sin(odom_yaw);         // m
+  odom_yaw = NORMALIZE(odom_yaw + angular); // rad
 #ifdef _ODOM_DEBUG
 //ROS_DEBUG_STREAM( "odom x: " << odom_x << " y: " << odom_y << " yaw: " << odom_yaw );
 #endif
@@ -745,7 +866,7 @@ ROS_DEBUG("");
 
   geometry_msgs::Quaternion quat = tf::createQuaternionMsgFromYaw(odom_yaw);
 
-  if ( pub_odom_tf )
+  if (pub_odom_tf)
   {
     tf_msg.header.seq++;
     tf_msg.header.stamp = ros::Time::now();
@@ -769,98 +890,97 @@ ROS_DEBUG("");
   odom_msg.twist.twist.angular.y = 0.0;
   odom_msg.twist.twist.angular.z = vyaw;
   odom_pub.publish(odom_msg);
-
 }
-
 
 int MainNode::run()
 {
 
-	ROS_INFO("Beginning setup...");
+  ROS_INFO("Beginning setup...");
 
-	serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
-	controller.setPort(port);
-	controller.setBaudrate(baud);
-	controller.setTimeout(timeout);
+  serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
+  controller.setPort(port);
+  controller.setBaudrate(baud);
+  controller.setTimeout(timeout);
 
-	// TODO: support automatic re-opening of port after disconnection
-	while ( ros::ok() )
-	{
-		ROS_INFO_STREAM("Opening serial port on " << port << " at " << baud << "..." );
-		try
-		{
-			controller.open();
-			if ( controller.isOpen() )
-			{
-				ROS_INFO("Successfully opened serial port");
-				break;
-			}
-		}
-		catch (serial::IOException e)
-		{
-			ROS_WARN_STREAM("serial::IOException: " << e.what());
-		}
-		ROS_WARN("Failed to open serial port");
-		sleep( 5 );
-	}
+  while (ros::ok())
+  {
+    if (open_serial())
+    {
+      break;
+    }
+    else
+    {
+      sleep(5);
+    }
+  }
 
-	cmdvel_setup();
-	odom_setup();
+  cmdvel_setup();
+  odom_setup();
 
   starttime = millis();
   hstimer = starttime;
   mstimer = starttime;
   lstimer = starttime;
 
-//  ros::Rate loop_rate(10);
+  // ros::Rate loop_rate(10);
 
   ROS_INFO("Beginning looping...");
-	
+
   while (ros::ok())
   {
-
-    cmdvel_loop();
-    odom_loop();
-
-    uint32_t nowtime = millis();
-//ROS_INFO_STREAM("loop nowtime: " << nowtime << " lstimer: " << lstimer << " delta: " << DELTAT(nowtime,lstimer) << " / " << (nowtime-lstimer));
-//uint32_t delta = DELTAT(nowtime,lstimer);
-//ROS_INFO_STREAM("loop nowtime: " << nowtime << " lstimer: " << lstimer << " delta: " << delta << " / " << (nowtime-lstimer));
-
-//    // Handle 50 Hz publishing
-//    if (DELTAT(nowtime,hstimer) >= 20)
-    // Handle 30 Hz publishing
-    if (DELTAT(nowtime,hstimer) >= 33)
+    try
     {
-      hstimer = nowtime;
-//      odom_hs_run();
+      if (controller.isOpen())
+      {
+        cmdvel_loop();
+        odom_loop();
+
+        uint32_t nowtime = millis();
+
+        //    // Handle 50 Hz publishing
+        //    if (DELTAT(nowtime,hstimer) >= 20)
+        // Handle 30 Hz publishing
+        if (DELTAT(nowtime, hstimer) >= 33)
+        {
+          hstimer = nowtime;
+          //      odom_hs_run();
+        }
+
+        // Handle 10 Hz publishing
+        if (DELTAT(nowtime, mstimer) >= 100)
+        {
+          mstimer = nowtime;
+          cmdvel_run();
+          odom_ms_run();
+        }
+
+        // Handle 1 Hz publishing
+        if (DELTAT(nowtime, lstimer) >= 1000)
+        {
+          lstimer = nowtime;
+          odom_ls_run();
+        }
+
+        ros::spinOnce();
+        continue;
+      }
+    }
+    catch (serial::IOException e)
+    {
+      ROS_WARN_STREAM("serial::IOException: " << e.what());
     }
 
-    // Handle 10 Hz publishing
-    if (DELTAT(nowtime,mstimer) >= 100)
-    {
-      mstimer = nowtime;
-      cmdvel_run();
-      odom_ms_run();
-    }
+    if (!open_serial())
+      sleep(5);
 
-    // Handle 1 Hz publishing
-    if (DELTAT(nowtime,lstimer) >= 1000)
-    {
-      lstimer = nowtime;
-      odom_ls_run();
-    }
-
-    ros::spinOnce();
-
-//    loop_rate.sleep();
+    //    loop_rate.sleep();
   }
-	
-  if ( controller.isOpen() )
+
+  if (controller.isOpen())
     controller.close();
 
   ROS_INFO("Exiting");
-	
+
   return 0;
 }
 
@@ -877,4 +997,3 @@ int main(int argc, char **argv)
 
   return node.run();
 }
-
